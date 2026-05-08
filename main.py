@@ -60,7 +60,7 @@ def get_user_endpoint(user_id: int, auth: dict = Depends(get_user_from_auth)):
 @app.post("/api/stream/purchase")
 def purchase_stream(request: Request, auth: dict = Depends(get_user_from_auth)):
     user_id = int(auth["id"])
-    data = request.json()
+    data = await request.json()
     idem = data.get("idempotency_key")
     if not idem: raise HTTPException(400, "Missing idempotency_key")
     
@@ -88,7 +88,7 @@ def africa_webhook(request: Request):
     sig = request.headers.get("X-Africa-Signature")
     if not africa_callback.verify_signature(body_bytes, sig, config.WEBHOOK_SECRET):
         raise HTTPException(401, "Invalid signature")
-    form = request.form()
+    form = await request.form()
     return {"status": "received", "phone": form.get("phoneNumber")}
 
 if __name__ == "__main__":
