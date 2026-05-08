@@ -1,39 +1,23 @@
 import os
-import json
-import hmac
-import hashlib
-from urllib.parse import parse_qsl
-from decimal import Decimal, ROUND_DOWN
-from datetime import datetime, timezone
-
-from fastapi import FastAPI, Request, HTTPException, Depends, Form
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-import config, db, africa_callback
+from datetime import datetime, timezone
 
 app = FastAPI(title="Zazu MVP Backend")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- TELEGRAM AUTH ---
-def verify_telegram_init_data(init_data: str, bot_token: str) -> bool:
-    try:
-        params = dict(parse_qsl(init_data))
-        received = params.pop("hash", "")
-        if not received: return False
-        check_str = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
-        secret = hashlib.sha256(bot_token.encode()).digest()
-        expected = hmac.new(secret, check_str.encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, received)
-    except Exception:
-        return False
+@app.get("/health")
+def health():
+    return {"status": "healthy", "ts": datetime.now(timezone.utc).isoformat()}
 
-def get_user_from_auth(request: Request) -> dict:
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise HTTPException(401, "Missing Telegram auth")
-    raw = auth.split(" ", 1)[1]
-    if not verify_telegram_init_data(raw, config.BOT_TOKEN):
-        raise HTTPException(401, "Invalid auth signature")
+@app.get("/")
+def root():
+    return {"app": "Zazu", "version": "1.0"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
     params = dict(parse_qsl(raw))
     return json.loads(params.get("user", "{}"))
 
