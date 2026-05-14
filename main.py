@@ -8,10 +8,8 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 import config, db, africa_callback
-import identity_service
 
 app = FastAPI(title="Zazu MVP Backend")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -47,7 +45,7 @@ def calc_split(gross_kobo: int) -> dict:
     creator = int(Decimal(str(net)) * Decimal("0.60").quantize(Decimal("0.01"), rounding=ROUND_DOWN))
     return {"gross_kobo": gross_kobo, "vat_kobo": vat, "net_kobo": net, "creator_kobo": creator, "platform_kobo": net - creator}
 
-# --- EXISTING ROUTES ---
+# --- ROUTES ---
 @app.get("/health")
 def health():
     return {"status": "healthy", "ts": datetime.now(timezone.utc).isoformat()}
@@ -58,6 +56,7 @@ def get_user_endpoint(user_id: int, auth: dict = Depends(get_user_from_auth)):
         raise HTTPException(403, "User ID mismatch")
     user = db.get_user(user_id)
     if not user:
+        # Auto-create user with welcome bonus
         db.create_user_if_new(user_id, auth.get("username", ""), auth.get("first_name", ""))
         user = db.get_user(user_id)
     return user
@@ -93,66 +92,6 @@ def africa_webhook(request: Request):
         raise HTTPException(401, "Invalid signature")
     form = request.form()
     return {"status": "received", "phone": form.get("phoneNumber")}
-
-# ========== IDENTITY LAYER ENDPOINTS (Sprint 0) ==========
-
-@app.get("/api/v2/identity/flags")
-async def get_feature_flags():
-    flags = {}
-    for flag in ["ENABLE_ZKP", "ENABLE_NIN_LINK", "ENABLE_GLOBAL_EIDV", "ENABLE_TON_WALLET"]:
-        flags[flag] = await identity_service.is_feature_enabled(flag)
-    return {"features": flags}
-
-@app.get("/api/v2/identity/status")
-async def get_identity_status(auth: dict = Depends(get_user_from_auth)):
-    user_id = int(auth["id"])
-    if not await identity_service.is_feature_enabled("ENABLE_ZKP"):
-        return {
-            "status": "feature_in_beta",
-            "message": "Identity verification is coming soon",
-            "current_level": "unverified"
-        }
-    return await identity_service.check_identity_status(user_id)
-
-@app.post("/api/v2/identity/verify/nin-link")
-async def verify_nin_link_endpoint(request: Request, auth: dict = Depends(get_user_from_auth)):
-    if not await identity_service.is_feature_enabled("ENABLE_ZKP"):
-        raise HTTPException(423, "Identity verification is in beta - check back soon")
-    user_id = int(auth["id"])
-    data = await request.json()
-    required = ["nin", "phone", "full_name"]
-    if not all(k in data for k in required):
-        raise HTTPException(400, f"Missing required fields: {required}")
-    if len(data["nin"].strip()) != 11:
-        raise HTTPException(400, "NIN must be 11 digits")
-    result = await identity_service.verify_nin_link(
-        user_id=user_id,
-        nin=data["nin"].strip(),
-        phone=data["phone"].strip(),
-        full_name=data["full_name"].strip()
-    )
-    status_code = 200 if result["status"] == "verified" else (400 if result["status"] == "failed" else 423)
-    return JSONResponse(status_code=status_code, content=result)
-
-@app.post("/api/v2/identity/verify/global")
-async def verify_global_eidv_endpoint(request: Request, auth: dict = Depends(get_user_from_auth)):
-    if not await identity_service.is_feature_enabled("ENABLE_ZKP"):
-        raise HTTPException(423, "Identity verification is in beta - check back soon")
-    user_id = int(auth["id"])
-    data = await request.json()
-    provider = data.get("provider", "").lower()
-    if provider not in ["onfido", "jumio"]:
-        raise HTTPException(400, "Supported providers: onfido, jumio")
-    document_data = data.get("document_data", {})
-    if not document_data.get("type") or not document_data.get("country"):
-        raise HTTPException(400, "document_data must include 'type' and 'country'")
-    result = await identity_service.verify_global_eidv(
-        user_id=user_id,
-        provider=provider,
-        document_data=document_data
-    )
-    status_code = 200 if result["status"] == "verified" else (400 if result["status"] == "failed" else 423)
-    return JSONResponse(status_code=status_code, content=result)
 
 if __name__ == "__main__":
     import uvicorn
