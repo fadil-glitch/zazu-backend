@@ -20,6 +20,7 @@ def health():
 
 @app.get("/api/user/{user_id}")
 def get_user(user_id: int):
+    # Public MVP endpoint — always returns the demo wallet
     return {
         "user_id": user_id,
         "telegram_username": "zazu_user",
@@ -27,6 +28,7 @@ def get_user(user_id: int):
         "balance_kobo": 10000,
         "maintenance_paid_until": None,
         "voice_registered": False
+    }
     }
 
 @app.get("/api/channels")
