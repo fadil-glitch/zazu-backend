@@ -40,17 +40,23 @@ def get_channels():
 
 @app.get("/api/stream/{channel_id}")
 async def stream_channel(channel_id: str, segment: str = None):
+    """
+    Full HLS proxy: rewrites EVERY playlist (master + variant) so that
+    all segment requests also go through this endpoint.
+    """
     client = create_client(SUPABASE_URL, SUPABASE_KEY)
     res = client.table("channel_catalog").select("hls_url").eq("channel_id", channel_id).single().execute()
     if not res.data:
         raise HTTPException(404, "Channel not found")
     hls_url = res.data["hls_url"]
 
+    # Determine the actual upstream URL to fetch
     if segment:
         target_url = urljoin(hls_url, segment)
     else:
         target_url = hls_url
 
+    # Fetch from upstream
     try:
         upstream = rq.get(target_url, headers={"User-Agent": "ZazuTV/1.0"}, timeout=15)
         if upstream.status_code != 200:
@@ -61,19 +67,25 @@ async def stream_channel(channel_id: str, segment: str = None):
     content = upstream.content
     content_type = upstream.headers.get("Content-Type", "application/vnd.apple.mpegurl")
 
-    if not segment and (target_url.endswith(".m3u8") or target_url.endswith(".m3u")):
+    # Determine if this response is an HLS playlist (ends with .m3u8 or .m3u)
+    is_playlist = target_url.endswith(".m3u8") or target_url.endswith(".m3u") or ".m3u8" in content_type or ".m3u" in content_type
+
+    if is_playlist:
         try:
             text = content.decode("utf-8")
             new_lines = []
             for line in text.splitlines():
                 sline = line.strip()
+                # If the line is not a comment and not empty, it's a URI – rewrite it
                 if sline and not sline.startswith("#"):
-                    proxy_url = f"/api/stream/{channel_id}?segment={sline}"
-                    new_lines.append(proxy_url)
+                    # Build the proxy URL for this segment
+                    new_url = f"/api/stream/{channel_id}?segment={sline}"
+                    new_lines.append(new_url)
                 else:
                     new_lines.append(line)
             content = "\n".join(new_lines).encode("utf-8")
         except Exception:
+            # If decoding fails, just serve the raw content
             pass
 
     headers = {
