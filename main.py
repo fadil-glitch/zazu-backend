@@ -194,8 +194,8 @@ function closePlayer(){
 </body>
 </html>"""
 
-@app.get("/mini-app", response_class=HTMLResponse)
-def serve_mini_app():
+@app.get("/", response_class=HTMLResponse)
+def serve_root():
     return HTMLResponse(content=MINI_APP_HTML, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 if __name__ == "__main__":
