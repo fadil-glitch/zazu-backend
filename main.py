@@ -13,14 +13,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://eqintnfuyquhscxwudzr.supabase.co")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxaW50bmZ1eXF1aHNjeHd1ZHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MzE4NTQsImV4cCI6MjA5NDEwNzg1NH0.rW7IJ3G7BkuLi1YnB_Q1W4y2ghi-UwKEzoo23oFSe70")
 
-# ---------- API ROUTES ----------
 @app.get("/health")
 def health():
     return {"status": "healthy", "ts": datetime.now(timezone.utc).isoformat()}
 
 @app.get("/api/user/{user_id}")
 def get_user(user_id: int):
-    # Public MVP endpoint — always returns the demo wallet
     return {
         "user_id": user_id,
         "telegram_username": "zazu_user",
@@ -28,7 +26,6 @@ def get_user(user_id: int):
         "balance_kobo": 10000,
         "maintenance_paid_until": None,
         "voice_registered": False
-    }
     }
 
 @app.get("/api/channels")
@@ -113,137 +110,7 @@ async def stream_channel(channel_id: str, segment: str = None):
     }
     return Response(content=content, status_code=upstream.status_code, headers=headers)
 
-# ---------- MINI APP (served directly by Render) ----------
-MINI_APP_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Zazu Media</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<style>
-body { margin:0; background:#0a0a0f; color:#fff; font-family:system-ui; padding:16px; }
-h2 { text-align:center; }
-.bal { font-size:42px; font-weight:800; text-align:center; margin:20px 0; color:#00cec9; }
-button { width:100%; padding:14px; margin:8px 0; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; }
-.primary { background:#6c5ce7; color:#fff; }
-.text-btn { background:none; color:#00cec9; }
-.hidden { display: none !important; }
-.player-box { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; margin:16px 0; }
-video { width:100%; height:100%; object-fit:contain; display:block; background:black; }
-.watermark { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; font-family:monospace; font-size:14px; color:rgba(255,255,255,0.25); white-space:nowrap; animation:drift 22s linear infinite; z-index:10; }
-@keyframes drift { 0%{transform:translate(-100%,-100%)} 25%{transform:translate(0,0)} 50%{transform:translate(100%,100%)} 75%{transform:translate(0,200%)} 100%{transform:translate(-100%,100%)} }
-.info { text-align:center; font-size:13px; opacity:0.7; margin-bottom:8px; }
-#channel-list { margin-top:8px; }
-.section-title { text-align:center; margin-top:24px; margin-bottom:8px; font-weight:bold; opacity:0.8; }
-</style>
-</head>
-<body>
-<div id="wallet-screen">
-  <h2>💰 Your Wallet</h2>
-  <div class="bal">₦<span id="bal-val">0.00</span></div>
-  <div class="section-title">Live Channels</div>
-  <div id="channel-list"><p style="text-align:center;opacity:0.6;">Loading channels...</p></div>
-</div>
-<div id="player-screen" class="hidden">
-  <div class="player-box">
-    <video id="vid" controls playsinline disablepictureinpicture controlsList="nodownload"></video>
-    <div id="wm" class="watermark"></div>
-  </div>
-  <p class="info">Forensic watermark active</p>
-  <button class="text-btn" onclick="closePlayer()">← Back to Wallet</button>
-</div>
-<script>
-const tg = window.Telegram.WebApp;
-tg.expand(); tg.enableClosingConfirmation();
-const API = window.location.origin;
-
-function loadWallet(){
-  const balEl = document.getElementById('bal-val');
-  balEl.textContent = "0.00";
-  const u = tg.initDataUnsafe?.user;
-  if(!u) return;
-  fetch(API + '/api/user/' + u.id + '?t=' + Date.now())
-    .then(r => r.ok ? r.json() : null)
-    .then(data => { if(data && data.balance_kobo) balEl.textContent = (data.balance_kobo/100).toFixed(2); })
-    .catch(() => {});
-}
-MINI_APP_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Zazu Media</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<style>
-body { margin:0; background:#0a0a0f; color:#fff; font-family:system-ui; padding:16px; }
-h2 { text-align:center; }
-.bal { font-size:42px; font-weight:800; text-align:center; margin:20px 0; color:#00cec9; }
-button { width:100%; padding:14px; margin:8px 0; border:none; border-radius:12px; font-size:16px; font-weight:600; cursor:pointer; }
-.primary { background:#6c5ce7; color:#fff; }
-.text-btn { background:none; color:#00cec9; }
-.hidden { display: none !important; }
-.player-box { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:12px; overflow:hidden; margin:16px 0; }
-video { width:100%; height:100%; object-fit:contain; display:block; background:black; }
-.watermark { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; font-family:monospace; font-size:14px; color:rgba(255,255,255,0.25); white-space:nowrap; animation:drift 22s linear infinite; z-index:10; }
-@keyframes drift { 0%{transform:translate(-100%,-100%)} 25%{transform:translate(0,0)} 50%{transform:translate(100%,100%)} 75%{transform:translate(0,200%)} 100%{transform:translate(-100%,100%)} }
-.info { text-align:center; font-size:13px; opacity:0.7; margin-bottom:8px; }
-#channel-list { margin-top:8px; }
-.section-title { text-align:center; margin-top:24px; margin-bottom:8px; font-weight:bold; opacity:0.8; }
-#debug { color:#ff7675; font-size:12px; margin-top:16px; text-align:center; }
-</style>
-</head>
-<body>
-<div id="wallet-screen">
-  <h2>💰 Your Wallet</h2>
-  <div class="bal">₦<span id="bal-val">0.00</span></div>
-  <div class="section-title">Live Channels</div>
-  <div id="channel-list"><p style="text-align:center;opacity:0.6;">Loading channels...</p></div>
-  <div id="debug"></div>
-</div>
-<div id="player-screen" class="hidden">
-  <div class="player-box">
-    <video id="vid" controls playsinline disablepictureinpicture controlsList="nodownload"></video>
-    <div id="wm" class="watermark"></div>
-  </div>
-  <p class="info">Forensic watermark active</p>
-  <button class="text-btn" onclick="closePlayer()">← Back to Wallet</button>
-</div>
-<script>
-var API = "https://zazu-backend-1.onrender.com";
-var debugEl = document.getElementById('debug');
-function log(msg) { if(debugEl) debugEl.innerHTML += msg + '<br>'; console.log(msg); }
-
-log('Script started');
-log('API: ' + API);
-
-// Wallet
-function loadWallet(){
-  log('loadWallet called');
-  var balEl = document.getElementById('bal-val');
-  balEl.textContent = "0.00";
-  if(!window.tg || !window.tg.initDataUnsafe || !window.tg.initDataUnsafe.user){
-    log('No Telegram user found - using hardcoded wallet');
-    balEl.textContent = "100.00";
-    return;
-  }
-  var u = window.tg.initDataUnsafe.user;
-  log('User ID: ' + u.id);
-  fetch(API + '/api/user/' + u.id + '?t=' + Date.now())
-    .then(function(r){ log('Wallet fetch status: ' + r.status); return r.ok ? r.json() : null; })
-    .then(function(data){
-      if(data && data.balance_kobo){
-        log('Balance: ' + data.balance_kobo);
-        balEl.textContent = (data.balance_kobo/100).toFixed(2);
-      } else {
-        log('No balance data');
-        balEl.textContent = "100.00";
-      }MINI_APP_HTML = """
-<!DOCTYPE html>
+MINI_APP_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -272,9 +139,9 @@ video { width:100%; height:100%; object-fit:contain; display:block; background:b
   <h2>💰 Your Wallet</h2>
   <div class="bal">₦<span id="bal-val">100.00</span></div>
   <div class="section-title">Live Channels</div>
-  <button class="primary" onclick="playHls('https://zazu-backend-1.onrender.com/api/stream/66932fb7-0f16-4c1a-ba56-8dfc7fd6b859')">📺 Mux HLS Test</button>
-  <button class="primary" onclick="playHls('https://zazu-backend-1.onrender.com/api/stream/da55cc0a-c03c-4f74-ac2e-3962dcb69a64')">📺 Red Bull TV Sports</button>
-  <button class="primary" onclick="playMp4('https://zazu-backend-1.onrender.com/api/stream/556957d4-5e05-4d15-92f1-bae1589f98d3')">📺 Big Buck Bunny (MP4)</button>
+  <button class="primary" onclick="playHls(&apos;https://zazu-backend-1.onrender.com/api/stream/66932fb7-0f16-4c1a-ba56-8dfc7fd6b859&apos;)">📺 Mux HLS Test</button>
+  <button class="primary" onclick="playHls(&apos;https://zazu-backend-1.onrender.com/api/stream/da55cc0a-c03c-4f74-ac2e-3962dcb69a64&apos;)">📺 Red Bull TV Sports</button>
+  <button class="primary" onclick="playMp4(&apos;https://zazu-backend-1.onrender.com/api/stream/556957d4-5e05-4d15-92f1-bae1589f98d3&apos;)">📺 Big Buck Bunny (MP4)</button>
 </div>
 <div id="player-screen" class="hidden">
   <div class="player-box">
@@ -325,8 +192,7 @@ function closePlayer(){
 }
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 @app.get("/mini-app", response_class=HTMLResponse)
 def serve_mini_app():
