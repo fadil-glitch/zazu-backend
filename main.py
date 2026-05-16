@@ -110,7 +110,8 @@ async def stream_channel(channel_id: str, segment: str = None):
     }
     return Response(content=content, status_code=upstream.status_code, headers=headers)
 
-MINI_APP_HTML = """<!DOCTYPE html>
+MINI_APP_HTML = """
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -139,9 +140,7 @@ video { width:100%; height:100%; object-fit:contain; display:block; background:b
   <h2>💰 Your Wallet</h2>
   <div class="bal">₦<span id="bal-val">100.00</span></div>
   <div class="section-title">Live Channels</div>
-  <button class="primary" onclick="playHls(&apos;https://zazu-backend-1.onrender.com/api/stream/66932fb7-0f16-4c1a-ba56-8dfc7fd6b859&apos;)">📺 Mux HLS Test</button>
-  <button class="primary" onclick="playHls(&apos;https://zazu-backend-1.onrender.com/api/stream/da55cc0a-c03c-4f74-ac2e-3962dcb69a64&apos;)">📺 Red Bull TV Sports</button>
-  <button class="primary" onclick="playMp4(&apos;https://zazu-backend-1.onrender.com/api/stream/556957d4-5e05-4d15-92f1-bae1589f98d3&apos;)">📺 Big Buck Bunny (MP4)</button>
+  <div id="channel-list"><p style="text-align:center;opacity:0.6;">Loading channels...</p></div>
 </div>
 <div id="player-screen" class="hidden">
   <div class="player-box">
@@ -152,12 +151,15 @@ video { width:100%; height:100%; object-fit:contain; display:block; background:b
   <button class="text-btn" onclick="closePlayer()">← Back to Wallet</button>
 </div>
 <script>
+var API = "https://zazu-backend-1.onrender.com";
 var hls = null;
+
 function show(id){
   document.getElementById('wallet-screen').classList.add('hidden');
   document.getElementById('player-screen').classList.add('hidden');
   document.getElementById(id).classList.remove('hidden');
 }
+
 function playMp4(url){
   show('player-screen');
   var vid = document.getElementById('vid');
@@ -168,6 +170,7 @@ function playMp4(url){
   vid.src = url;
   vid.play().catch(function(){});
 }
+
 function playHls(url){
   show('player-screen');
   var vid = document.getElementById('vid');
@@ -185,15 +188,46 @@ function playHls(url){
     vid.play().catch(function(){});
   }
 }
+
 function closePlayer(){
   if(hls){ hls.destroy(); hls = null; }
   document.getElementById('vid').src = '';
   show('wallet-screen');
 }
+
+// Dynamic channel loader
+function loadChannels(){
+  var container = document.getElementById('channel-list');
+  fetch(API + '/api/channels?t=' + Date.now())
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(data){
+      var channels = (data && data.channels) || [];
+      container.innerHTML = '';
+      if(!channels.length){
+        container.innerHTML = '<p style="text-align:center;opacity:0.6;">No channels yet.</p>';
+        return;
+      }
+      channels.forEach(function(ch){
+        var btn = document.createElement('button');
+        btn.className = 'primary';
+        btn.textContent = '📺 ' + ch.name;
+        var streamUrl = API + '/api/stream/' + ch.channel_id;
+        if(ch.format === 'mp4'){
+          btn.onclick = function(){ playMp4(streamUrl); };
+        } else {
+          btn.onclick = function(){ playHls(streamUrl); };
+        }
+        container.appendChild(btn);
+      });
+    })
+    .catch(function(){ container.innerHTML = '<p style="text-align:center;opacity:0.6;">Failed to load channels.</p>'; });
+}
+
+loadChannels();
 </script>
 </body>
-</html>"""
-
+</html>
+"""
 @app.get("/", response_class=HTMLResponse)
 def serve_root():
     return HTMLResponse(content=MINI_APP_HTML, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
